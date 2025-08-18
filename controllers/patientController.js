@@ -55,11 +55,11 @@ exports.getAllPatients = async (req, res) => {
   }
 };
 
-exports.getAllPatients = async (req, res) => {
+/*exports.getAllPatients = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('CALL get_all_patients_proc($1)', ['cur']);
+    await client.query('CALL get_all_patients_proc($1)');
     const result = await client.query('FETCH ALL FROM cur');
     await client.query('COMMIT');
     res.status(200).json(result.rows);
@@ -70,10 +70,22 @@ exports.getAllPatients = async (req, res) => {
   } finally {
     client.release();
   }
+};*/
+exports.getAllPatients = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT call_get_all_patients_proc()');
+    res.status(200).json(result.rows[0].call_get_all_patients_proc); // send the JSON
+  } catch (err) {
+    console.error('Error fetching patients:', err);
+    res.status(500).json({ error: 'Failed to fetch patients' });
+  } finally {
+    client.release();
+  }
 };
 
 
-exports.getReleasedPatients = async (req, res) => {
+/*exports.getReleasedPatients = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -88,6 +100,20 @@ exports.getReleasedPatients = async (req, res) => {
   } finally {
     client.release();
   }
-};
+};*/
 
+
+
+exports.getReleasedPatients = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT call_get_released_patients_proc()');
+    res.status(200).json(result.rows[0].call_get_released_patients_proc);
+  } catch (err) {
+    console.error('Error fetching released patients:', err);
+    res.status(500).json({ error: 'Failed to fetch released patients' });
+  } finally {
+    client.release();
+  }
+};
 
