@@ -1,131 +1,93 @@
-const pool = require("../db");
+const { Pool } = require("pg");
 
-const registerPatient = async (req, res) => {
+const pool = new Pool({
+ user: "postgres",
+  host: "localhost",
+  database: "postgres",
+  password: "isdb62",
+  port: 5432,
+});
+
+exports.insertPatient = async (req, res) => {
   const { name, age, disease } = req.body;
-  if (!name || !age || !disease) {
-    return res.status(400).json({ error: "All fields are required" });
-  }
 
   try {
-    const result = await pool.query(
-      "INSERT INTO patients (name, age, disease) VALUES ($1, $2, $3) RETURNING *",
-      [name, age, disease]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+    await pool.query('CALL insert_patient_proc($1, $2, $3)', [name, age, disease]);
+    res.status(201).json({ message: 'Patient inserted successfully' });
+  } catch (error) {
+    console.error('Insert Error:', error);
+    res.status(500).json({ error: 'Failed to insert patient' });
   }
 };
 
-const admitPatient = async (req, res) => {
+exports.updateStatus = async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { status } = req.body;
+
   try {
-    const { id } = req.params;
-    const result = await pool.query(
-      "UPDATE patients SET status='ADMITTED' WHERE id=$1 RETURNING *",
-      [id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Patient not found" });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+    await pool.query('CALL update_patient_status_proc($1, $2)', [id, status]);
+    res.status(200).json({ message: 'Status updated successfully' });
+  } catch (error) {
+    console.error('Update Error:', error);
+    res.status(500).json({ error: 'Failed to update status' });
   }
 };
 
-const releasePatient = async (req, res) => {
+exports.deletePatient = async (req, res) => {
+  const id = parseInt(req.params.id);
+
   try {
-    const { id } = req.params;
-    const result = await pool.query(
-      "UPDATE patients SET status='RELEASED' WHERE id=$1 RETURNING *",
-      [id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Patient not found" });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+    await pool.query('CALL delete_patient_proc($1)', [id]);
+    res.status(200).json({ message: 'Patient deleted successfully' });
+  } catch (error) {
+    console.error('Delete Error:', error);
+    res.status(500).json({ error: 'Failed to delete patient' });
   }
 };
 
-const getAllPatients = async (req, res) => {
+exports.getAllPatients = async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM patients");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+    const result = await pool.query('SELECT * FROM patients ORDER BY id ASC');
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Fetch Error:', error);
+    res.status(500).json({ error: 'Failed to fetch patients' });
   }
 };
 
-module.exports = {
-  registerPatient,
-  admitPatient,
-  releasePatient,
-  getAllPatients
+exports.getAllPatients = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CALL get_all_patients_proc($1)', ['cur']);
+    const result = await client.query('FETCH ALL FROM cur');
+    await client.query('COMMIT');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error fetching patients:', err);
+    res.status(500).json({ error: 'Failed to fetch patients' });
+  } finally {
+    client.release();
+  }
 };
 
 
-
-
-
-
-
-
-
-// let patients = [];
-// let idCounter = 1;
-
-// const registerPatient = (req, res) => {
-//   const { name, age, disease } = req.body;
-
-//   if (!name || !age || !disease) {
-//     return res.status(400).json({ error: "All fields are required" });
-//   }
-
-//   const patient = {
-//     id: idCounter++,
-//     name,
-//     age,
-//     disease,
-//     status: "REGISTERED"
-//   };
-
-//   patients.push(patient);
-//   res.status(201).json(patient);
-// };
-
-// const admitPatient = (req, res) => {
-//   const patient = patients.find(p => p.id == req.params.id);
-
-//   if (!patient) {
-//     return res.status(404).json({ error: "Patient not found" });
-//   }
-
-//   patient.status = "ADMITTED";
-//   res.json(patient);
-// };
-
-// const releasePatient = (req, res) => {
-//   const patient = patients.find(p => p.id == req.params.id);
-
-//   if (!patient) {
-//     return res.status(404).json({ error: "Patient not found" });
-//   }
-
-//   patient.status = "RELEASED";
-//   res.json(patient);
-// };
-
-// const getAllPatients = (req, res) => {
-//   res.json(patients);
-// };
-
-// module.exports = {
-//   registerPatient,
-//   admitPatient,
-//   releasePatient,
-//   getAllPatients
-// };
+exports.getReleasedPatients = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CALL get_released_patients_proc($1)', ['cur_released']);
+    const result = await client.query('FETCH ALL FROM cur_released');
+    await client.query('COMMIT');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error("Error fetching discharged patients:", err);
+    res.status(500).json({ error: 'Failed to fetch discharged patients' });
+  } finally {
+    client.release();
+  }
+};
 
 
