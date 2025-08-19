@@ -6,8 +6,15 @@ app.use(cors());
 app.use(express.json());
 
 const patientRoutes = require("./routes/patientRoutes");
-app.use("/api/patients", patientRoutes);
+const testRoutes = require("./routes/testRoutes");
+const reportRoutes = require("./routes/reportRoutes");
 
-app.listen(5000, () => {
-  console.log("Server running on http://localhost:5000");
+app.use("/api/patients", patientRoutes);
+app.use("/api/tests", testRoutes);
+app.use("/api/reports", reportRoutes);
+
+
+const PORT = 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

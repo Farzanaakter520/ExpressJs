@@ -75,7 +75,7 @@ exports.getAllPatients = async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query('SELECT call_get_all_patients_proc()');
-    res.status(200).json(result.rows[0].call_get_all_patients_proc); // send the JSON
+    res.status(200).json(result.rows[0].call_get_all_patients_proc); 
   } catch (err) {
     console.error('Error fetching patients:', err);
     res.status(500).json({ error: 'Failed to fetch patients' });
