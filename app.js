@@ -14,8 +14,13 @@ const testRoutes = require('./routes/testRoutes');
 const reportRoutes = require('./routes/reportRoutes'); 
 const hospitalRoutes = require('./routes/hospitalRoutes');
 const clinicalDiagnosisRoutes = require('./routes/clinicalDiagnosisRoutes');
+const designationRoutes = require("./routes/designations");
+const specialtyRoutes = require("./routes/specialties");
 
 
+
+app.use("/designations", designationRoutes);
+app.use("/specialties", specialtyRoutes);
 app.use('/api/hospitals', hospitalRoutes);   
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/patients', patientRoutes);
