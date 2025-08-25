@@ -3,7 +3,6 @@ const router = express.Router();
 const pool = require("../config/db");
 
 
-// Insert
 router.post("/", async (req, res) => {
   const { name, insert_by } = req.body;
   try {
@@ -14,7 +13,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Update
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, update_by } = req.body;
@@ -30,7 +28,6 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -41,7 +38,6 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Deactivate
 router.patch("/deactivate/:id", async (req, res) => {
   const { id } = req.params;
   const { update_by } = req.body;
@@ -52,5 +48,29 @@ router.patch("/deactivate/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.post('/crud', async (req, res) => {
+    try {
+        const params = req.body; 
+        const result = await pool.query('CALL proc_designations_crud($1, $2)', [params, null]);
+        res.json({ success: true, msg: 'Procedure called', data: null });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, msg: 'Procedure failed', error: err.message });
+    }
+});
+
+
+router.post('/archive', async (req, res) => {
+    try {
+        const { years } = req.body;
+        await pool.query('CALL proc_designations_archive($1)', [years]);
+        res.json({ success: true, msg: `Archiving done for records older than ${years} years` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, msg: 'Archiving failed', error: err.message });
+    }
+});
+
 
 module.exports = router;

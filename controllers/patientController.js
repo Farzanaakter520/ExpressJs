@@ -1,119 +1,80 @@
+const PDFDocument = require("pdfkit");
 const { Pool } = require("pg");
+const { sendMail } = require("../utils/emailService");
 
 const pool = new Pool({
- user: "postgres",
+  user: "postgres",
   host: "localhost",
   database: "postgres",
   password: "isdb62",
   port: 5432,
 });
 
-exports.insertPatient = async (req, res) => {
-  const { name, age, disease } = req.body;
+// Release letter + email
+exports.releaseLetterAndEmail = async (req, res) => {
+  const { patient_id, email } = req.body;
 
-  try {
-    await pool.query('CALL insert_patient_proc($1, $2, $3)', [name, age, disease]);
-    res.status(201).json({ message: 'Patient inserted successfully' });
-  } catch (error) {
-    console.error('Insert Error:', error);
-    res.status(500).json({ error: 'Failed to insert patient' });
+  if (!patient_id || !email) {
+    return res.status(400).json({ success: false, msg: "Patient ID & Email required" });
   }
-};
-
-exports.updateStatus = async (req, res) => {
-  const id = parseInt(req.params.id);
-  const { status } = req.body;
 
   try {
-    await pool.query('CALL update_patient_status_proc($1, $2)', [id, status]);
-    res.status(200).json({ message: 'Status updated successfully' });
-  } catch (error) {
-    console.error('Update Error:', error);
-    res.status(500).json({ error: 'Failed to update status' });
-  }
-};
+    const { rows } = await pool.query(
+      "SELECT * FROM patients WHERE id=$1 AND status='RELEASED'",
+      [patient_id]
+    );
 
-exports.deletePatient = async (req, res) => {
-  const id = parseInt(req.params.id);
+    if (!rows[0]) {
+      return res.status(404).json({ success: false, msg: "Patient not found or not released" });
+    }
 
-  try {
-    await pool.query('CALL delete_patient_proc($1)', [id]);
-    res.status(200).json({ message: 'Patient deleted successfully' });
-  } catch (error) {
-    console.error('Delete Error:', error);
-    res.status(500).json({ error: 'Failed to delete patient' });
-  }
-};
+    const p = rows[0];
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
 
-exports.getAllPatients = async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM patients ORDER BY id ASC');
-    res.status(200).json(result.rows);
-  } catch (error) {
-    console.error('Fetch Error:', error);
-    res.status(500).json({ error: 'Failed to fetch patients' });
-  }
-};
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", async () => {
+      const pdfData = Buffer.concat(buffers);
 
-/*exports.getAllPatients = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('CALL get_all_patients_proc($1)');
-    const result = await client.query('FETCH ALL FROM cur');
-    await client.query('COMMIT');
-    res.status(200).json(result.rows);
+      const mailResp = await sendMail(
+        email,
+        "Patient Release Letter",
+        `Dear ${p.name},\n\nPlease find attached your release letter from ABC Hospital.\n\nRegards,\nABC Hospital`,
+        pdfData,
+        `${p.name}_release_letter.pdf`
+      );
+
+      if (mailResp.success) {
+        res.status(200).json({ success: true, msg: "Release letter emailed successfully!" });
+      } else {
+        res.status(500).json({ success: false, msg: "Email failed", error: mailResp.error });
+      }
+    });
+
+    // PDF content
+    doc.fontSize(20).text("ABC Hospital", { align: "center" });
+    doc.fontSize(16).text("Patient Release Letter", { align: "center" });
+    doc.moveDown(2);
+
+    doc.text(`Patient Name: ${p.name}`);
+    doc.text(`Age: ${p.age}`);
+    doc.text(`Disease: ${p.disease}`);
+    doc.text(`Admission Date: ${new Date(p.admission_date).toLocaleDateString()}`);
+    doc.text(`Release Date: ${new Date(p.release_date).toLocaleDateString()}`);
+
+    doc.moveDown(2);
+    doc.text("We wish you a speedy recovery.");
+    doc.end();
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error fetching patients:', err);
-    res.status(500).json({ error: 'Failed to fetch patients' });
-  } finally {
-    client.release();
-  }
-};*/
-exports.getAllPatients = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const result = await client.query('SELECT call_get_all_patients_proc()');
-    res.status(200).json(result.rows[0].call_get_all_patients_proc); 
-  } catch (err) {
-    console.error('Error fetching patients:', err);
-    res.status(500).json({ error: 'Failed to fetch patients' });
-  } finally {
-    client.release();
+    console.error("Release Letter Email Error:", err);
+    res.status(500).json({ success: false, msg: "Error generating & sending release letter" });
   }
 };
 
-
-/*exports.getReleasedPatients = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('CALL get_released_patients_proc($1)', ['cur_released']);
-    const result = await client.query('FETCH ALL FROM cur_released');
-    await client.query('COMMIT');
-    res.status(200).json(result.rows);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error("Error fetching discharged patients:", err);
-    res.status(500).json({ error: 'Failed to fetch discharged patients' });
-  } finally {
-    client.release();
-  }
-};*/
-
-
-
-exports.getReleasedPatients = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const result = await client.query('SELECT call_get_released_patients_proc()');
-    res.status(200).json(result.rows[0].call_get_released_patients_proc);
-  } catch (err) {
-    console.error('Error fetching released patients:', err);
-    res.status(500).json({ error: 'Failed to fetch released patients' });
-  } finally {
-    client.release();
-  }
-};
-
+// dummy CRUD (তোমার চাইলে এগুলো implement করতে পারো)
+exports.insertPatient = (req, res) => res.json({ msg: "insertPatient called" });
+exports.updateStatus = (req, res) => res.json({ msg: "updateStatus called" });
+exports.deletePatient = (req, res) => res.json({ msg: "deletePatient called" });
+exports.releaseLetterById = (req, res) => res.json({ msg: "releaseLetterById called" });
+exports.getAllPatients = (req, res) => res.json({ msg: "getAllPatients called" });
+exports.getReleasedPatients = (req, res) => res.json({ msg: "getReleasedPatients called" });
